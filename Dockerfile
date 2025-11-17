@@ -9,8 +9,22 @@ RUN mkdir -p /var/lib/tailscale /var/run/tailscale
 
 # Copy the Tailscale startup script
 COPY tailscale-start.sh /usr/local/bin/tailscale-start.sh
+
+# Convert line endings to Unix (fix ENOEXEC if script has CRLF)
+RUN sed -i 's/\r$//' /usr/local/bin/tailscale-start.sh
+
+# Make executable
 RUN chmod +x /usr/local/bin/tailscale-start.sh
 
-# Append to the existing startup script to run Tailscale first
-# (Assumes the image uses /dockerstartup/startup.sh; adjust if your image differs)
-RUN echo "/usr/local/bin/tailscale-start.sh &" >> /dockerstartup/startup.sh
+# Append a Supervisor program section to run Tailscale
+# (The base image uses /etc/supervisord.conf for its config)
+RUN cat >> /etc/supervisord.conf <<EOF
+
+[program:tailscale]
+command=/usr/local/bin/tailscale-start.sh
+priority=5  ; Lower priority starts earlier—adjust if needed (base programs use 0)
+autorestart=true
+stdout_logfile=/dev/fd/1
+stdout_logfile_maxbytes=0
+redirect_stderr=true
+EOF
